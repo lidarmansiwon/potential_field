@@ -6,8 +6,13 @@ from geometry_msgs.msg import Twist, PoseStamped
 from tf2_geometry_msgs import PoseStamped as TfPoseStamped
 from tf2_ros import TransformListener, Buffer
 import tf2_ros
+import tf2_py as tf2
 import tf2_geometry_msgs
 import math
+#from transforms3d.euler import euler2quat
+#from tf_transformations import euler_from_quaternion
+import numpy as np
+
 
 class PotentialField(Node):
     def __init__(self):
@@ -17,8 +22,8 @@ class PotentialField(Node):
 
         # self.getParam()
 
-        self.odom_subscription  = self.create_subscription(Odometry, 'odom', self.odom_callback, 10)
-        self.lidar_subscription = self.create_subscription(LaserScan, 'scan', self.scan_callback,10)
+        self.odom_subscription  = self.create_subscription(PoseStamped, '/orin/current_pose', self.odom_callback, 10)
+        self.lidar_subscription = self.create_subscription(LaserScan, '/orin/scan', self.scan_callback,10)
         self.odom_subscription
         self.lidar_subscription # 사용하지 않는 변수 경고 방지?
 
@@ -43,8 +48,46 @@ class PotentialField(Node):
 
         # 노드의 파라미터 서버에서 파라미터 가져오기
         # self.goals                  = self.get_parameter('/nav_info/goals').value
+    def euler_to_quaternion(self, roll, pitch, yaw):
+        """
+        Convert euler angles (roll, pitch, yaw) into a quaternion
+        """
+        cy = np.cos(yaw * 0.5)
+        sy = np.sin(yaw * 0.5)
+        cp = np.cos(pitch * 0.5)
+        sp = np.sin(pitch * 0.5)
+        cr = np.cos(roll * 0.5)
+        sr = np.sin(roll * 0.5)
 
+        w = cy * cp * cr + sy * sp * sr
+        x = cy * cp * sr - sy * sp * cr
+        y = sy * cp * sr + cy * sp * cr
+        z = sy * cp * cr - cy * sp * sr
 
+        return w, x, y, z
+
+    def quaternion_to_euler(self, w, x, y, z):
+        """
+        Convert a quaternion into euler angles (pitch, roll, yaw)
+        """
+        # roll (x-axis rotation)
+        sinr_cosp = 2 * (w * x + y * z)
+        cosr_cosp = 1 - 2 * (x * x + y * y)
+        roll = np.arctan2(sinr_cosp, cosr_cosp)
+
+        # pitch (y-axis rotation)
+        sinp = 2 * (w * y - z * x)
+        if np.abs(sinp) >= 1:
+            pitch = np.pi / 2 * np.sign(sinp) # use 90 degrees if out of range
+        else:
+            pitch = np.arcsin(sinp)
+
+        # yaw (z-axis rotation)
+        siny_cosp = 2 * (w * z + x * y)
+        cosy_cosp = 1 - 2 * (y * y + z * z)
+        yaw = np.arctan2(siny_cosp, cosy_cosp)
+
+        return roll, pitch, yaw  # in radians
 
     def controller(self):
         x_final = self.V_attraction[0] + self.V_repulsion[0]
@@ -82,7 +125,7 @@ class PotentialField(Node):
         vector.pose.position.z = 0
 
         angle = math.atan2(y, x)
-        quaternion = tf2_ros.transformations.quaternion_from_euler(0, 0, angle)
+        quaternion = self.euler_to_quaternion(0, 0, angle)
         vector.pose.orientation = tf2_geometry_msgs.Quaternion(*quaternion)
 
         return vector
@@ -101,11 +144,12 @@ class PotentialField(Node):
         self.att_pub.publish(attraction_vector)
 
     def odom_callback(self, msg):
-        self.x_odom = msg.pose.pose.position.x
-        self.y_odom = msg.pose.pose.position.y
-        quaternion = (msg.pose.pose.orientation.x, msg.pose.pose.orientation.y,
-                      msg.pose.pose.orientation.z, msg.pose.pose.orientation.w)
-        _, _, self.theta = tf2_ros.transformations.euler_from_quaternion(quaternion)
+        self.x_odom = msg.pose.position.x
+        self.y_odom = msg.pose.position.y
+        quaternion = (msg.pose.orientation.x, msg.pose.orientation.y,
+                      msg.pose.orientation.z, msg.pose.orientation.w)
+        print(quaternion[0],quaternion[1])
+        roll, pitch, self.theta = self.quaternion_to_euler(quaternion[3],quaternion[0],quaternion[1],quaternion[2])
 
         self.compute_attraction(self.goal_x, self.goal_y)
 

@@ -13,11 +13,16 @@
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>
   <test_depend>python3-pytest</test_depend>
+  <test_depend>python-transforms3d-pip</test_depend>
+
 
   <depend>rclcpp</depend>
   <depend>nav_msgs</depend>
   <depend>geometry_msgs</depend>
   <depend>sensor_msgs</depend>
+  <depend>tf_transformations</depend>
+  <!-- <depend>transforms3d</depend> -->
+
 
 
   <export>
