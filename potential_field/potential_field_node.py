@@ -2,12 +2,12 @@ import rclpy
 from rclpy.node import Node
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan
-from geometry_msgs.msg import Twist, PoseStamped
+from geometry_msgs.msg import Twist, PoseStamped, Quaternion
 from tf2_geometry_msgs import PoseStamped as TfPoseStamped
 from tf2_ros import TransformListener, Buffer
 import tf2_ros
 import tf2_py as tf2
-import tf2_geometry_msgs
+#import tf2_geometry_msgs
 import math
 #from transforms3d.euler import euler2quat
 #from tf_transformations import euler_from_quaternion
@@ -122,12 +122,11 @@ class PotentialField(Node):
         vector.header.stamp = self.get_clock().now().to_msg()
         vector.pose.position.x = self.x_odom
         vector.pose.position.y = self.y_odom
-        vector.pose.position.z = 0
+        vector.pose.position.z = 0.0
 
         angle = math.atan2(y, x)
         quaternion = self.euler_to_quaternion(0, 0, angle)
-        vector.pose.orientation = tf2_geometry_msgs.Quaternion(*quaternion)
-
+        vector.pose.orientation = Quaternion(w=quaternion[0], x=quaternion[1], y=quaternion[2], z=quaternion[3])
         return vector
 
     def compute_attraction(self, x_a, y_a):
@@ -149,7 +148,7 @@ class PotentialField(Node):
         quaternion = (msg.pose.orientation.x, msg.pose.orientation.y,
                       msg.pose.orientation.z, msg.pose.orientation.w)
         print(quaternion[0],quaternion[1])
-        roll, pitch, self.theta = self.quaternion_to_euler(quaternion[3],quaternion[0],quaternion[1],quaternion[2])
+        _, _, self.theta = self.quaternion_to_euler(quaternion[3],quaternion[0],quaternion[1],quaternion[2])
 
         self.compute_attraction(self.goal_x, self.goal_y)
 
