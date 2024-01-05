@@ -12,6 +12,7 @@ import math
 #from transforms3d.euler import euler2quat
 #from tf_transformations import euler_from_quaternion
 import numpy as np
+from visualization_msgs.msg import Marker, MarkerArray
 
 
 class PotentialField(Node):
@@ -35,10 +36,13 @@ class PotentialField(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
+
         # x_goal = self.goals[0][0]
         # y_goal = self.goals[0][1]
-        x_goal = 3
-        y_goal = 4
+        x_goal = 5
+        y_goal = 0
+
+        self.theta = None
         
         self.get_logger().info(f'x = {x_goal} and y = {y_goal}')
         self.goal_x = float(x_goal)
@@ -106,19 +110,19 @@ class PotentialField(Node):
 
         if delta < 0 - tolerance:
             direction.angular.z = -0.2
-            direction.linear.x = 0
+            direction.linear.x = 0.0
         elif delta > 0 + tolerance:
             direction.angular.z = 0.2
-            direction.linear.x = 0
+            direction.linear.x = 0.0
         else:
             direction.linear.x = 0.1
-            direction.angular.z = 0
+            direction.angular.z = 0.0
 
         self.cmd_pub.publish(direction)
 
     def publish_vector(self, x, y):
         vector = PoseStamped()
-        vector.header.frame_id = '/odom'
+        vector.header.frame_id = '/os_lidar'
         vector.header.stamp = self.get_clock().now().to_msg()
         vector.pose.position.x = self.x_odom
         vector.pose.position.y = self.y_odom
@@ -153,19 +157,36 @@ class PotentialField(Node):
         self.compute_attraction(self.goal_x, self.goal_y)
 
     def scan_callback(self, msg):
+
+        if (self.theta is None):
+            print("none")
+            return
+
+
         angle_min = msg.angle_min
         step = msg.angle_increment
+        
         scan = msg.ranges
         counter = 0
         x_r = 0
         y_r = 0
-
+        
+        
         for i in range(len(scan)):
-            if 0.1 < scan[i] < 100:
-                Q_repulsion = 1
-                current_q = Q_repulsion / (4 * math.pi * scan[i]**2)
+            if 0.1 < scan[i] < 3:
+                Q_repulsion = -0.3
+                current_q = Q_repulsion / (4 * math.pi * scan[i]**2)  ## math.pi * scan[i]**2 --> 거리를 반지름으로 하는 원의 면적 계산 * 4 = 전체 공간 
+                ## 척력 계수 Q_repulsion를 전체 공간에 나누어서, 척력의 크기를 해당 거리에 대한 공간 면적으로 정규화
+
+                print(x_r, y_r, "rrrrrrrrrrrrrrrrr")
+
+                print(current_q," current_q")
+                print(math.cos(angle_min + self.theta + step * i))
+
                 x_r -= current_q * math.cos(angle_min + self.theta + step * i)
                 y_r -= current_q * math.sin(angle_min + self.theta + step * i)
+
+                print(x_r,y_r ," after")
             else:
                 counter += 1
 
@@ -174,9 +195,12 @@ class PotentialField(Node):
         else:
             self.V_repulsion = [x_r, y_r]
 
+        print(self.V_repulsion,"reeeeeeeeeeeeee")
+
         repulsion_vector = self.publish_vector(self.V_repulsion[0], self.V_repulsion[1])
         self.rep_pub.publish(repulsion_vector)
         self.controller()
+
 
 def main(args=None):
     rclpy.init(args=args)
